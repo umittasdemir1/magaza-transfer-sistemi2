@@ -395,10 +395,113 @@ def analyze_data():
 
 @app.route('/export/excel', methods=['POST'])
 def export_excel():
-    """Excel export - ORIJINAL FORMATTA"""
+    """Excel export - DÜZELTILMIŞ SÜRÜM"""
     try:
+        # DÜZELTME: Request body'den results al
+        try:
+            request_data = request.get_json()
+            if request_data and 'results' in request_data:
+                sistem.mevcut_analiz = request_data['results']
+                logger.info("Excel export: Request body'den analiz sonucu alındı")
+        except Exception as e:
+            logger.warning(f"Request body okunamadı: {e}")
+        
+        # Mevcut analiz kontrolü
         if not sistem.mevcut_analiz:
+            logger.error("Excel export: Analiz sonucu bulunamadı")
             return jsonify({'error': 'Analiz sonucu bulunamadı'}), 400
+        
+        logger.info(f"Excel export başlatılıyor: {len(sistem.mevcut_analiz.get('transferler', []))} transfer")
+        
+        transferler = sistem.mevcut_analiz['transferler']
+        transfer_gereksiz = sistem.mevcut_analiz.get('transfer_gereksiz', [])
+        
+        # Excel dosyası oluştur
+        output = io.BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Transfer önerileri sayfası
+            if transferler:
+                df_transfer = pd.DataFrame(transferler)
+                
+                # ORIJINAL SÜTUN MAPPING
+                kolon_mapping = {
+                    'urun_anahtari': 'Ürün Grubu (Ad+Renk+Beden)',
+                    'urun_kodu': 'Ürün Kodu (Örnek)',
+                    'urun_adi': 'Ürün Adı',
+                    'renk': 'Renk',
+                    'beden': 'Beden',
+                    'gonderen_magaza': 'Gönderen Mağaza',
+                    'alan_magaza': 'Alan Mağaza',
+                    'transfer_miktari': 'Transfer Miktarı',
+                    'gonderen_satis': 'Gönderen Satış',
+                    'gonderen_envanter': 'Gönderen Envanter',
+                    'alan_satis': 'Alan Satış',
+                    'alan_envanter': 'Alan Envanter',
+                    'gonderen_str': 'Gönderen STR (%)',
+                    'alan_str': 'Alan STR (%)',
+                    'str_farki': 'STR Farkı (%)',
+                    'teorik_transfer': 'Teorik Transfer',
+                    'uygulanan_filtre': 'Uygulanan Filtre',
+                    'alan_stok_durumu': 'Alan Stok Durumu',
+                    'magaza_sayisi': 'Mevcut Mağaza Sayısı',
+                    'min_str': 'Min STR (%)',
+                    'max_str': 'Max STR (%)',
+                    'satis_farki': 'Satış Farkı',
+                    'envanter_farki': 'Envanter Farkı'
+                }
+                
+                # Sadece mevcut sütunları eşleştir
+                mevcut_mapping = {k: v for k, v in kolon_mapping.items() if k in df_transfer.columns}
+                df_transfer = df_transfer.rename(columns=mevcut_mapping)
+                tutulacak_kolonlar = list(mevcut_mapping.values())
+                df_transfer = df_transfer[tutulacak_kolonlar]
+                df_transfer.to_excel(writer, index=False, sheet_name='Transfer Önerileri')
+                logger.info(f"Excel: {len(df_transfer)} transfer önerisi yazıldı")
+            
+            # Transfer gerekmeyen ürünler sayfası
+            if transfer_gereksiz:
+                df_gereksiz = pd.DataFrame(transfer_gereksiz)
+                gereksiz_mapping = {
+                    'urun_anahtari': 'Ürün Grubu (Ad+Renk+Beden)',
+                    'urun_adi': 'Ürün Adı',
+                    'renk': 'Renk',
+                    'beden': 'Beden',
+                    'magaza_sayisi': 'Mevcut Mağaza Sayısı',
+                    'ortalama_str': 'Ortalama STR (%)',
+                    'str_fark': 'STR Farkı (%)',
+                    'red_nedeni': 'Transfer Yapılmama Nedeni'
+                }
+                df_gereksiz = df_gereksiz.rename(columns=gereksiz_mapping)
+                gereksiz_kolonlar = list(gereksiz_mapping.values())
+                df_gereksiz = df_gereksiz[gereksiz_kolonlar]
+                df_gereksiz.to_excel(writer, index=False, sheet_name='Transfer Gerekmeyen')
+                logger.info(f"Excel: {len(df_gereksiz)} gereksiz transfer yazıldı")
+            
+            # Mağaza metrikleri
+            if sistem.mevcut_analiz.get('magaza_metrikleri'):
+                df_metrikler = pd.DataFrame(sistem.mevcut_analiz['magaza_metrikleri']).T
+                df_metrikler.to_excel(writer, sheet_name='Mağaza Metrikleri')
+                logger.info("Excel: Mağaza metrikleri yazıldı")
+        
+        output.seek(0)
+        
+        # Dosya adı
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'global_transfer_analizi_{timestamp}.xlsx'
+        
+        logger.info(f"Excel dosyası oluşturuldu: {filename}")
+        
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        logger.error(f"Export error: {str(e)}")
+        return jsonify({'error': f'Export hatası: {str(e)}'}), 500
         
         transferler = sistem.mevcut_analiz['transferler']
         transfer_gereksiz = sistem.mevcut_analiz.get('transfer_gereksiz', [])
