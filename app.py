@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-import csv
+import pandas as pd
+import os
 import io
 import json
-import os
 from datetime import datetime
 from werkzeug.utils import secure_filename
 import tempfile
@@ -14,114 +14,67 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, origins=[
-    "https://umittasdemir1.github.io",
-    "http://localhost:3000",
-    "*"
-])
+CORS(app, origins=["*"])
 
 # Configuration
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
-UPLOAD_FOLDER = tempfile.gettempdir()
-ALLOWED_EXTENSIONS = {'csv'}
+ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
 
 class MagazaTransferSistemi:
     def __init__(self):
-        self.data = []
+        self.data = None
         self.magazalar = []
         self.mevcut_analiz = None
 
-    def csv_oku(self, file_content):
-        """CSV içeriğini oku ve işle"""
+    def dosya_yukle_df(self, df):
+        """DataFrame'i yükle ve işle - ORIJINAL KOD"""
         try:
-            # CSV'yi satır satır oku (GİRİNTİ DÜZELTİLDİ)
-            if ';' in file_content.split('\n')[0]:
-                csv_reader = csv.DictReader(io.StringIO(file_content), delimiter=';')
-            else:
-                csv_reader = csv.DictReader(io.StringIO(file_content), delimiter=',')
-            data = []
+            # Sütun isimlerini temizle
+            df.columns = df.columns.str.strip()
             
-            for row in csv_reader:
-                # Sütun isimlerini temizle
-                clean_row = {}
-                for key, value in row.items():
-                    clean_key = key.strip()
-                    clean_row[clean_key] = value
-                data.append(clean_row)
+            logger.info(f"Bulunan sütunlar: {list(df.columns)}")
             
-            logger.info(f"CSV okundu: {len(data)} satır")
-            
-            # Gerekli sütunları kontrol et
-            if not data:
-                return False, "CSV dosyası boş!"
-            
-            first_row = data[0]
             gerekli_sutunlar = ['Depo Adı', 'Ürün Kodu', 'Ürün Adı', 'Satis', 'Envanter']
-            eksik_sutunlar = [s for s in gerekli_sutunlar if s not in first_row]
+            eksik_sutunlar = [s for s in gerekli_sutunlar if s not in df.columns]
             
             if eksik_sutunlar:
                 return False, f"Eksik sütunlar: {', '.join(eksik_sutunlar)}"
             
-            # Verileri temizle ve dönüştür
-            temiz_data = []
-            magazalar_set = set()
+            df = df.dropna(subset=['Depo Adı'])
+            df['Satis'] = pd.to_numeric(df['Satis'], errors='coerce').fillna(0)
+            df['Envanter'] = pd.to_numeric(df['Envanter'], errors='coerce').fillna(0)
             
-            for row in data:
-                if not row.get('Depo Adı'):
-                    continue
-                    
-                try:
-                    satis = float(row.get('Satis', 0) or 0)
-                    envanter = float(row.get('Envanter', 0) or 0)
-                    
-                    # Negatif değerleri sıfırla
-                    satis = max(0, satis)
-                    envanter = max(0, envanter)
-                    
-                    temiz_row = {
-                        'Depo Adı': row['Depo Adı'].strip(),
-                        'Ürün Kodu': row.get('Ürün Kodu', '').strip(),
-                        'Ürün Adı': row.get('Ürün Adı', '').strip(),
-                        'Renk Açıklaması': row.get('Renk Açıklaması', '').strip(),
-                        'Beden': row.get('Beden', '').strip(),
-                        'Satis': int(satis),
-                        'Envanter': int(envanter)
-                    }
-                    
-                    temiz_data.append(temiz_row)
-                    magazalar_set.add(temiz_row['Depo Adı'])
-                    
-                except ValueError as e:
-                    logger.warning(f"Satır atlandı: {row}, Hata: {e}")
-                    continue
+            # Negatif değerleri sıfırla
+            df['Satis'] = df['Satis'].clip(lower=0)
+            df['Envanter'] = df['Envanter'].clip(lower=0)
             
-            self.data = temiz_data
-            self.magazalar = list(magazalar_set)
+            self.data = df
+            self.magazalar = df['Depo Adı'].unique().tolist()
             
-            logger.info(f"Veri işlendi: {len(temiz_data)} satır, {len(self.magazalar)} mağaza")
+            logger.info(f"Veri yüklendi: {len(df)} satır, {len(self.magazalar)} mağaza")
             
             return True, {
-                'message': f"Başarılı! {len(temiz_data):,} ürün, {len(self.magazalar)} mağaza yüklendi.",
-                'satir_sayisi': len(temiz_data),
+                'message': f"Başarılı! {len(df):,} ürün, {len(self.magazalar)} mağaza yüklendi.",
+                'satir_sayisi': len(df),
                 'magaza_sayisi': len(self.magazalar),
                 'magazalar': self.magazalar,
-                'sutunlar': list(first_row.keys()) if data else []
+                'sutunlar': list(df.columns)
             }
             
         except Exception as e:
-            logger.error(f"CSV okuma hatası: {str(e)}")
+            logger.error(f"Dosya yükleme hatası: {str(e)}")
             return False, f"Hata: {str(e)}"
 
     def magaza_metrikleri_hesapla(self):
-        """Her mağaza için metrikleri hesapla"""
-        if not self.data:
+        """Her mağaza için metrikleri hesapla - ORIJINAL KOD"""
+        if self.data is None:
             return {}
 
         metrikler = {}
         for magaza in self.magazalar:
-            magaza_data = [row for row in self.data if row['Depo Adı'] == magaza]
-            toplam_satis = sum(row['Satis'] for row in magaza_data)
-            toplam_envanter = sum(row['Envanter'] for row in magaza_data)
+            magaza_data = self.data[self.data['Depo Adı'] == magaza]
+            toplam_satis = magaza_data['Satis'].sum()
+            toplam_envanter = magaza_data['Envanter'].sum()
 
             metrikler[magaza] = {
                 'toplam_satis': int(toplam_satis),
@@ -132,116 +85,219 @@ class MagazaTransferSistemi:
             }
         return metrikler
 
+    def urun_anahtari_olustur(self, urun_adi, renk, beden):
+        """Ürün adı + renk + beden kombinasyonu ile benzersiz anahtar oluştur - ORIJINAL KOD"""
+        urun_adi = str(urun_adi).strip().upper() if pd.notna(urun_adi) else ""
+        renk = str(renk).strip().upper() if pd.notna(renk) else ""
+        beden = str(beden).strip().upper() if pd.notna(beden) else ""
+        return f"{urun_adi} {renk} {beden}".strip()
+
     def str_hesapla(self, satis, envanter):
-        """Sell-Through Rate hesapla"""
+        """Sell-Through Rate hesapla - ORIJINAL KOD"""
         toplam = satis + envanter
         if toplam == 0:
             return 0
         return satis / toplam
 
-    def basit_transfer_analizi(self):
-        """Basit transfer analizi"""
-        if not self.data:
+    def str_bazli_transfer_hesapla(self, gonderen_satis, gonderen_envanter, alan_satis, alan_envanter):
+        """STR bazlı transfer miktarı hesapla - ORIJINAL KOD"""
+        gonderen_str = self.str_hesapla(gonderen_satis, gonderen_envanter)
+        alan_str = self.str_hesapla(alan_satis, alan_envanter)
+        str_farki = alan_str - gonderen_str
+        teorik_transfer = str_farki * gonderen_envanter
+        
+        # Koruma filtreleri
+        max_transfer_40 = gonderen_envanter * 0.40
+        min_kalan_2 = gonderen_envanter - 2
+        max_5_adet = 5
+        
+        transfer_miktari = min(teorik_transfer, max_transfer_40, min_kalan_2, max_5_adet)
+        transfer_miktari = max(1, min(transfer_miktari, gonderen_envanter))
+        
+        return int(transfer_miktari), {
+            'gonderen_str': round(gonderen_str * 100, 1),
+            'alan_str': round(alan_str * 100, 1),
+            'str_farki': round(str_farki * 100, 1),
+            'teorik_transfer': round(teorik_transfer, 1),
+            'uygulanan_filtre': 'Max %40' if transfer_miktari == max_transfer_40 else 
+                               'Min 2 kalsın' if transfer_miktari == min_kalan_2 else
+                               'Max 5 adet' if transfer_miktari == max_5_adet else 'Teorik'
+        }
+
+    def transfer_kosulları_kontrol(self, gonderen_satis, gonderen_envanter, alan_satis, alan_envanter):
+        """STR bazlı transfer koşulları kontrol - ORIJINAL KOD"""
+        if alan_satis <= gonderen_satis:
+            return False, f"Alan satış ({alan_satis}) ≤ Gönderen satış ({gonderen_satis})"
+        
+        if gonderen_envanter < 3:
+            return False, f"Gönderen envanter yetersiz ({gonderen_envanter} < 3)"
+        
+        gonderen_str = self.str_hesapla(gonderen_satis, gonderen_envanter)
+        alan_str = self.str_hesapla(alan_satis, alan_envanter)
+        str_farki = alan_str - gonderen_str
+        
+        if str_farki < 0.15:
+            return False, f"STR farkı yetersiz ({str_farki*100:.1f}% < 15%)"
+        
+        transfer_miktari, detaylar = self.str_bazli_transfer_hesapla(
+            gonderen_satis, gonderen_envanter, alan_satis, alan_envanter
+        )
+        
+        if transfer_miktari <= 0:
+            return False, "Transfer miktarı hesaplanamadı"
+        
+        return True, f"STR: A{detaylar['alan_str']}%>G{detaylar['gonderen_str']}%, T:{transfer_miktari}"
+
+    def global_transfer_analizi_yap(self):
+        """Global ürün bazlı transfer analizi - ORIJINAL KOD"""
+        if self.data is None:
             return None
 
-        logger.info("Basit transfer analizi başlatılıyor...")
+        logger.info("Global ürün bazlı STR transfer analizi başlatılıyor...")
         
         metrikler = self.magaza_metrikleri_hesapla()
         transferler = []
+        transfer_gereksiz = []
+
+        # TÜM mağazaların ürünlerini grupla (ürün adı + renk + beden)
+        tum_data = self.data.copy()
+        tum_data['urun_anahtari'] = tum_data.apply(
+            lambda x: self.urun_anahtari_olustur(
+                x['Ürün Adı'], 
+                x.get('Renk Açıklaması', ''), 
+                x.get('Beden', '')
+            ), axis=1
+        )
         
-        # Ürün bazında analiz
-        urun_gruplari = {}
+        # Tüm benzersiz ürün anahtarlarını al
+        tum_urun_anahtarlari = tum_data['urun_anahtari'].unique()
         
-        # Ürünleri grupla
-        for row in self.data:
-            urun_key = f"{row['Ürün Adı']} {row.get('Renk Açıklaması', '')} {row.get('Beden', '')}".strip()
+        logger.info(f"Toplam {len(tum_urun_anahtarlari)} benzersiz ürün grubu analiz ediliyor...")
+
+        # Her ürün anahtarı için global optimizasyon
+        for index, urun_anahtari in enumerate(tum_urun_anahtarlari):
+            if (index + 1) % 100 == 0:
+                logger.info(f"İşlenen: {index + 1}/{len(tum_urun_anahtarlari)}")
+
+            # Bu ürünün tüm mağazalardaki durumunu analiz et
+            urun_data = tum_data[tum_data['urun_anahtari'] == urun_anahtari]
             
-            if urun_key not in urun_gruplari:
-                urun_gruplari[urun_key] = {}
-            
-            magaza = row['Depo Adı']
-            if magaza not in urun_gruplari[urun_key]:
-                urun_gruplari[urun_key][magaza] = {
-                    'satis': 0,
-                    'envanter': 0,
-                    'urun_adi': row['Ürün Adı'],
-                    'renk': row.get('Renk Açıklaması', ''),
-                    'beden': row.get('Beden', ''),
-                    'urun_kodu': row.get('Ürün Kodu', '')
-                }
-            
-            urun_gruplari[urun_key][magaza]['satis'] += row['Satis']
-            urun_gruplari[urun_key][magaza]['envanter'] += row['Envanter']
-        
-        # Her ürün için transfer analizi
-        for urun_key, magazalar_data in urun_gruplari.items():
-            if len(magazalar_data) < 2:  # En az 2 mağazada olmalı
+            # Mağaza bazında grupla
+            magaza_gruplari = urun_data.groupby('Depo Adı').agg({
+                'Satis': 'sum',
+                'Envanter': 'sum',
+                'Ürün Adı': 'first',
+                'Renk Açıklaması': 'first',
+                'Beden': 'first',
+                'Ürün Kodu': 'first'
+            }).reset_index()
+
+            # En az 2 mağazada olmalı transfer için
+            if len(magaza_gruplari) < 2:
                 continue
-            
-            # STR hesapla ve sırala
+
+            # Her mağaza için STR hesapla
             magaza_str_listesi = []
-            for magaza, data in magazalar_data.items():
-                str_value = self.str_hesapla(data['satis'], data['envanter'])
+            for _, magaza_grup in magaza_gruplari.iterrows():
+                magaza = magaza_grup['Depo Adı']
+                satis = magaza_grup['Satis']
+                envanter = magaza_grup['Envanter']
+                str_value = self.str_hesapla(satis, envanter)
+                
                 magaza_str_listesi.append({
                     'magaza': magaza,
+                    'satis': satis,
+                    'envanter': envanter,
                     'str': str_value,
-                    'satis': data['satis'],
-                    'envanter': data['envanter'],
-                    'urun_adi': data['urun_adi'],
-                    'renk': data['renk'],
-                    'beden': data['beden'],
-                    'urun_kodu': data['urun_kodu']
+                    'urun_adi': magaza_grup['Ürün Adı'],
+                    'renk': magaza_grup.get('Renk Açıklaması', ''),
+                    'beden': magaza_grup.get('Beden', ''),
+                    'urun_kodu': magaza_grup['Ürün Kodu']
                 })
-            
-            # STR'a göre sırala
+
+            # STR'a göre sırala (düşükten yükseğe)
             magaza_str_listesi.sort(key=lambda x: x['str'])
             
-            en_dusuk = magaza_str_listesi[0]
-            en_yuksek = magaza_str_listesi[-1]
+            # En düşük ve en yüksek STR'ı al
+            en_dusuk_str = magaza_str_listesi[0]
+            en_yuksek_str = magaza_str_listesi[-1]
+
+            # Transfer koşullarını kontrol et
+            kosul_sonuc, kosul_mesaj = self.transfer_kosulları_kontrol(
+                en_dusuk_str['satis'], en_dusuk_str['envanter'], 
+                en_yuksek_str['satis'], en_yuksek_str['envanter']
+            )
             
-            # Basit transfer koşulları
-            str_farki = (en_yuksek['str'] - en_dusuk['str']) * 100
-            
-            if (en_yuksek['satis'] > en_dusuk['satis'] and 
-                en_dusuk['envanter'] >= 3 and 
-                str_farki >= 15):
-                
-                # Transfer miktarı hesapla (basit)
-                transfer_miktari = min(
-                    int(str_farki / 100 * en_dusuk['envanter']),
-                    int(en_dusuk['envanter'] * 0.4),  # Max %40
-                    en_dusuk['envanter'] - 2,  # Min 2 kalsın
-                    5  # Max 5 adet
+            if kosul_sonuc:
+                # STR bazlı transfer miktarını hesapla
+                transfer_miktari, str_detaylar = self.str_bazli_transfer_hesapla(
+                    en_dusuk_str['satis'], en_dusuk_str['envanter'],
+                    en_yuksek_str['satis'], en_yuksek_str['envanter']
                 )
                 
-                transfer_miktari = max(1, transfer_miktari)
+                if transfer_miktari > 0:
+                    # Stok durumu STR bazında
+                    alan_str_val = str_detaylar['alan_str']
+                    if alan_str_val >= 80:
+                        stok_durumu = 'YÜKSEK'
+                    elif alan_str_val >= 50:
+                        stok_durumu = 'NORMAL'
+                    elif alan_str_val >= 20:
+                        stok_durumu = 'DÜŞÜK'
+                    else:
+                        stok_durumu = 'KRİTİK'
+                    
+                    transferler.append({
+                        'urun_anahtari': urun_anahtari,
+                        'urun_kodu': en_dusuk_str['urun_kodu'],
+                        'urun_adi': en_dusuk_str['urun_adi'],
+                        'renk': en_dusuk_str['renk'],
+                        'beden': en_dusuk_str['beden'],
+                        'gonderen_magaza': en_dusuk_str['magaza'],
+                        'alan_magaza': en_yuksek_str['magaza'],
+                        'transfer_miktari': int(transfer_miktari),
+                        'gonderen_satis': int(en_dusuk_str['satis']),
+                        'gonderen_envanter': int(en_dusuk_str['envanter']),
+                        'alan_satis': int(en_yuksek_str['satis']),
+                        'alan_envanter': int(en_yuksek_str['envanter']),
+                        'gonderen_str': str_detaylar['gonderen_str'],
+                        'alan_str': str_detaylar['alan_str'],
+                        'str_farki': str_detaylar['str_farki'],
+                        'teorik_transfer': str_detaylar['teorik_transfer'],
+                        'uygulanan_filtre': str_detaylar['uygulanan_filtre'],
+                        'alan_stok_durumu': stok_durumu,
+                        'magaza_sayisi': len(magaza_str_listesi),
+                        'min_str': round(en_dusuk_str['str'] * 100, 1),
+                        'max_str': round(en_yuksek_str['str'] * 100, 1),
+                        'satis_farki': int(en_yuksek_str['satis'] - en_dusuk_str['satis']),
+                        'envanter_farki': int(en_dusuk_str['envanter'] - en_yuksek_str['envanter'])
+                    })
+            else:
+                # Transfer gerekmeyen ürünleri kaydet
+                str_ortalama = sum(m['str'] for m in magaza_str_listesi) / len(magaza_str_listesi)
+                str_fark = max(m['str'] for m in magaza_str_listesi) - min(m['str'] for m in magaza_str_listesi)
                 
-                transferler.append({
-                    'urun_adi': en_dusuk['urun_adi'],
-                    'renk': en_dusuk['renk'],
-                    'beden': en_dusuk['beden'],
-                    'urun_kodu': en_dusuk['urun_kodu'],
-                    'gonderen_magaza': en_dusuk['magaza'],
-                    'alan_magaza': en_yuksek['magaza'],
-                    'transfer_miktari': transfer_miktari,
-                    'gonderen_satis': en_dusuk['satis'],
-                    'gonderen_envanter': en_dusuk['envanter'],
-                    'alan_satis': en_yuksek['satis'],
-                    'alan_envanter': en_yuksek['envanter'],
-                    'gonderen_str': round(en_dusuk['str'] * 100, 1),
-                    'alan_str': round(en_yuksek['str'] * 100, 1),
-                    'str_farki': round(str_farki, 1)
+                transfer_gereksiz.append({
+                    'urun_anahtari': urun_anahtari,
+                    'urun_adi': magaza_str_listesi[0]['urun_adi'],
+                    'renk': magaza_str_listesi[0]['renk'],
+                    'beden': magaza_str_listesi[0]['beden'],
+                    'magaza_sayisi': len(magaza_str_listesi),
+                    'ortalama_str': round(str_ortalama * 100, 1),
+                    'str_fark': round(str_fark * 100, 1),
+                    'red_nedeni': kosul_mesaj
                 })
-        
-        # STR farkına göre sırala
+
+        # STR farkına göre sırala (yüksek fark = daha öncelikli)
         transferler.sort(key=lambda x: x['str_farki'], reverse=True)
-        
-        logger.info(f"Analiz tamamlandı: {len(transferler)} transfer önerisi")
-        
+
+        logger.info(f"Global analiz tamamlandı: {len(transferler)} transfer, {len(transfer_gereksiz)} red")
+
         return {
-            'analiz_tipi': 'basit',
+            'analiz_tipi': 'global',
             'magaza_metrikleri': metrikler,
-            'transferler': transferler
+            'transferler': transferler,
+            'transfer_gereksiz': transfer_gereksiz
         }
 
 # Global sistem instance
@@ -255,14 +311,14 @@ def health_check():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'service': 'RetailFlow Transfer API',
-        'version': '1.0.0',
+        'service': 'RetailFlow Transfer API - ORIJINAL SISTEM',
+        'version': '4.0.0',
         'timestamp': datetime.now().isoformat()
     })
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Dosya yükleme endpoint'i"""
+    """Dosya yükleme endpoint'i - EXCEL + CSV DESTEĞI"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'Dosya seçilmedi'}), 400
@@ -272,18 +328,26 @@ def upload_file():
             return jsonify({'error': 'Dosya seçilmedi'}), 400
         
         if not allowed_file(file.filename):
-            return jsonify({'error': 'Sadece CSV dosyaları desteklenir'}), 400
+            return jsonify({'error': 'Geçersiz dosya formatı! Excel (.xlsx, .xls) veya CSV dosyası yükleyin.'}), 400
         
-        # Dosyayı oku
-        file_content = file.read().decode('utf-8')
+        filename = secure_filename(file.filename)
+        
+        # Excel veya CSV oku
+        if filename.lower().endswith('.csv'):
+            try:
+                df = pd.read_csv(file, encoding='utf-8')
+            except UnicodeDecodeError:
+                df = pd.read_csv(file, encoding='cp1254')
+        else:
+            df = pd.read_excel(file, engine='openpyxl' if filename.endswith('.xlsx') else None)
         
         # Sisteme yükle
-        success, result = sistem.csv_oku(file_content)
+        success, result = sistem.dosya_yukle_df(df)
         
         if success:
             return jsonify({
                 'success': True,
-                'filename': secure_filename(file.filename),
+                'filename': filename,
                 'data': result
             })
         else:
@@ -295,15 +359,15 @@ def upload_file():
 
 @app.route('/analyze', methods=['POST'])
 def analyze_data():
-    """Transfer analizi endpoint'i"""
+    """Global STR transfer analizi - ORIJINAL ALGORITMA"""
     try:
-        if not sistem.data:
+        if sistem.data is None:
             return jsonify({'error': 'Önce bir dosya yükleyin'}), 400
         
-        logger.info("Transfer analizi başlatılıyor...")
+        logger.info("Global STR transfer analizi başlatılıyor...")
         
-        # Analizi çalıştır
-        results = sistem.basit_transfer_analizi()
+        # ORIJINAL ANALİZ ALGORITMASINI ÇALIŞTIR
+        results = sistem.global_transfer_analizi_yap()
         
         if results:
             sistem.mevcut_analiz = results
@@ -318,16 +382,108 @@ def analyze_data():
         logger.error(f"Analysis error: {str(e)}")
         return jsonify({'error': f'Analiz hatası: {str(e)}'}), 500
 
+@app.route('/export/excel', methods=['POST'])
+def export_excel():
+    """Excel export - ORIJINAL FORMATTA"""
+    try:
+        if not sistem.mevcut_analiz:
+            return jsonify({'error': 'Analiz sonucu bulunamadı'}), 400
+        
+        transferler = sistem.mevcut_analiz['transferler']
+        transfer_gereksiz = sistem.mevcut_analiz.get('transfer_gereksiz', [])
+        
+        # Excel dosyası oluştur
+        output = io.BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Transfer önerileri sayfası
+            if transferler:
+                df_transfer = pd.DataFrame(transferler)
+                
+                # ORIJINAL SÜTUN MAPPING
+                kolon_mapping = {
+                    'urun_anahtari': 'Ürün Grubu (Ad+Renk+Beden)',
+                    'urun_kodu': 'Ürün Kodu (Örnek)',
+                    'urun_adi': 'Ürün Adı',
+                    'renk': 'Renk',
+                    'beden': 'Beden',
+                    'gonderen_magaza': 'Gönderen Mağaza',
+                    'alan_magaza': 'Alan Mağaza',
+                    'transfer_miktari': 'Transfer Miktarı',
+                    'gonderen_satis': 'Gönderen Satış',
+                    'gonderen_envanter': 'Gönderen Envanter',
+                    'alan_satis': 'Alan Satış',
+                    'alan_envanter': 'Alan Envanter',
+                    'gonderen_str': 'Gönderen STR (%)',
+                    'alan_str': 'Alan STR (%)',
+                    'str_farki': 'STR Farkı (%)',
+                    'teorik_transfer': 'Teorik Transfer',
+                    'uygulanan_filtre': 'Uygulanan Filtre',
+                    'alan_stok_durumu': 'Alan Stok Durumu',
+                    'magaza_sayisi': 'Mevcut Mağaza Sayısı',
+                    'min_str': 'Min STR (%)',
+                    'max_str': 'Max STR (%)',
+                    'satis_farki': 'Satış Farkı',
+                    'envanter_farki': 'Envanter Farkı'
+                }
+                
+                # Sadece mevcut sütunları eşleştir
+                mevcut_mapping = {k: v for k, v in kolon_mapping.items() if k in df_transfer.columns}
+                df_transfer = df_transfer.rename(columns=mevcut_mapping)
+                tutulacak_kolonlar = list(mevcut_mapping.values())
+                df_transfer = df_transfer[tutulacak_kolonlar]
+                df_transfer.to_excel(writer, index=False, sheet_name='Transfer Önerileri')
+            
+            # Transfer gerekmeyen ürünler sayfası
+            if transfer_gereksiz:
+                df_gereksiz = pd.DataFrame(transfer_gereksiz)
+                gereksiz_mapping = {
+                    'urun_anahtari': 'Ürün Grubu (Ad+Renk+Beden)',
+                    'urun_adi': 'Ürün Adı',
+                    'renk': 'Renk',
+                    'beden': 'Beden',
+                    'magaza_sayisi': 'Mevcut Mağaza Sayısı',
+                    'ortalama_str': 'Ortalama STR (%)',
+                    'str_fark': 'STR Farkı (%)',
+                    'red_nedeni': 'Transfer Yapılmama Nedeni'
+                }
+                df_gereksiz = df_gereksiz.rename(columns=gereksiz_mapping)
+                gereksiz_kolonlar = list(gereksiz_mapping.values())
+                df_gereksiz = df_gereksiz[gereksiz_kolonlar]
+                df_gereksiz.to_excel(writer, index=False, sheet_name='Transfer Gerekmeyen')
+            
+            # Mağaza metrikleri
+            if sistem.mevcut_analiz['magaza_metrikleri']:
+                df_metrikler = pd.DataFrame(sistem.mevcut_analiz['magaza_metrikleri']).T
+                df_metrikler.to_excel(writer, sheet_name='Mağaza Metrikleri')
+        
+        output.seek(0)
+        
+        # Dosya adı
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'global_transfer_analizi_{timestamp}.xlsx'
+        
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        logger.error(f"Export error: {str(e)}")
+        return jsonify({'error': f'Export hatası: {str(e)}'}), 500
+
 @app.route('/stores', methods=['GET'])
 def get_stores():
-    """Mağaza listesi endpoint'i"""
+    """Mağaza listesi"""
     try:
         if not sistem.magazalar:
             return jsonify({'error': 'Mağaza verisi bulunamadı'}), 400
         
         metrikler = sistem.magaza_metrikleri_hesapla()
-        
         stores = []
+        
         for magaza in sistem.magazalar:
             if magaza in metrikler:
                 m = metrikler[magaza]
@@ -341,51 +497,11 @@ def get_stores():
                     'excess_inventory': m['envanter_fazlasi']
                 })
         
-        return jsonify({
-            'success': True,
-            'stores': stores
-        })
+        return jsonify({'success': True, 'stores': stores})
         
     except Exception as e:
         logger.error(f"Stores error: {str(e)}")
         return jsonify({'error': f'Mağaza verisi hatası: {str(e)}'}), 500
-
-@app.route('/template', methods=['GET'])
-def download_template():
-    """CSV template indirme endpoint'i"""
-    try:
-        # Örnek CSV template oluştur
-        template_data = [
-            ['Depo Adı', 'Ürün Kodu', 'Ürün Adı', 'Renk Açıklaması', 'Beden', 'Satis', 'Envanter'],
-            ['İstanbul AVM', 'P001', 'Gömlek', 'Beyaz', 'M', '15', '25'],
-            ['Ankara Merkez', 'P001', 'Gömlek', 'Beyaz', 'M', '8', '40'],
-            ['İzmir Plaza', 'P002', 'Pantolon', 'Siyah', 'L', '12', '18']
-        ]
-        
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerows(template_data)
-        
-        output.seek(0)
-        
-        return send_file(
-            io.BytesIO(output.getvalue().encode('utf-8')),
-            as_attachment=True,
-            download_name='magaza_transfer_template.csv',
-            mimetype='text/csv'
-        )
-        
-    except Exception as e:
-        logger.error(f"Template error: {str(e)}")
-        return jsonify({'error': f'Template hatası: {str(e)}'}), 500
-
-@app.errorhandler(413)
-def too_large(e):
-    return jsonify({'error': 'Dosya boyutu çok büyük (Max: 50MB)'}), 413
-
-@app.errorhandler(500)
-def internal_error(e):
-    return jsonify({'error': 'İç sunucu hatası'}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
