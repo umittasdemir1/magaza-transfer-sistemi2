@@ -731,123 +731,66 @@
         }
 
         async function startAnalysis() {
-    if (!uploadedData) {
-        showNotification('Önce bir dosya yükleyin!', 'warning');
-        return;
-    }
-
-    const loading = document.getElementById('analysisLoading');
-    const resultsSection = document.getElementById('resultsSection');
-    
-    loading.style.display = 'block';
-    analyzeBtn.disabled = true;
-
-    try {
-        const response = await fetch(`${API_BASE}/analyze`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
+            if (!uploadedData) {
+                showNotification('Önce bir dosya yükleyin!', 'warning');
+                return;
             }
-        });
 
-        if (response.ok) {
-            const data = await response.json();
+            const loading = document.getElementById('analysisLoading');
+            const resultsSection = document.getElementById('resultsSection');
             
-            // BURADA EKSİK OLAN SATIRLAR:
-            analysisResults = data;  // Global değişkeni set et
-            
-            displayResults(data.results);
-            resultsSection.style.display = 'block';
-            document.getElementById('downloadBtn').disabled = false;
-            showNotification('Analiz başarıyla tamamlandı!', 'success');
-        } else {
-            throw new Error('Analysis failed');
+            loading.style.display = 'block';
+            analyzeBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Global değişkeni set et
+                    analysisResults = data;
+                    
+                    displayResults(data.results);
+                    resultsSection.style.display = 'block';
+                    document.getElementById('downloadBtn').disabled = false;
+                    showNotification('Analiz başarıyla tamamlandı!', 'success');
+                } else {
+                    throw new Error('Analysis failed');
+                }
+            } catch (error) {
+                console.error('Analysis error:', error);
+                showNotification('Analiz başarısız! Lütfen tekrar deneyin.', 'error');
+            } finally {
+                loading.style.display = 'none';
+                analyzeBtn.disabled = false;
+            }
         }
-    } catch (error) {
-        console.error('Analysis error:', error);
-        showNotification('Analiz başarısız! Lütfen tekrar deneyin.', 'error');
-    } finally {
-        loading.style.display = 'none';
-        analyzeBtn.disabled = false;
-    }
-}
 
         function displayResults(results) {
-    const statsContainer = document.getElementById('resultsStats');
-    const tableBody = document.getElementById('resultsTable');
+            const statsContainer = document.getElementById('resultsStats');
+            const tableBody = document.getElementById('resultsTable');
 
-    console.log('Results received:', results);
+            console.log('Results received:', results);
 
-    // Display stats
-    const transferler = results.transferler || [];
-    const metrikler = results.magaza_metrikleri || {};
-    const toplamTransfer = results.toplam_transfer_sayisi || transferler.length;
-    const toplamGereksiz = results.toplam_gereksiz_sayisi || 0;
+            // Display stats
+            const transferler = results.transferler || [];
+            const metrikler = results.magaza_metrikleri || {};
+            const toplamTransfer = results.toplam_transfer_sayisi || transferler.length;
+            const toplamGereksiz = results.toplam_gereksiz_sayisi || 0;
 
-    const stats = [
-        { label: 'Transfer Önerileri', value: toplamTransfer.toLocaleString(), icon: 'fas fa-truck' },
-        { label: 'Gösterilen Öneri', value: transferler.length.toLocaleString() + ' / ' + toplamTransfer.toLocaleString(), icon: 'fas fa-eye' },
-        { label: 'Toplam Transfer Miktarı', value: transferler.reduce((sum, t) => sum + t.transfer_miktari, 0).toLocaleString(), icon: 'fas fa-boxes' },
-        { label: 'Ortalama STR Farkı', value: (transferler.reduce((sum, t) => sum + t.str_farki, 0) / transferler.length || 0).toFixed(1) + '%', icon: 'fas fa-percentage' },
-        { label: 'Mağaza Sayısı', value: Object.keys(metrikler).length, icon: 'fas fa-store' }
-    ];
-
-    statsContainer.innerHTML = stats.map(stat => `
-        <div class="stat-item">
-            <div class="stat-label">
-                <i class="${stat.icon}"></i>
-                ${stat.label}
-            </div>
-            <div class="stat-value">${stat.value}</div>
-        </div>
-    `).join('');
-
-    // Display transfer table (first 20)
-    if (transferler && transferler.length > 0) {
-        tableBody.innerHTML = transferler.slice(0, 20).map(transfer => {
-            const priorityClass = transfer.str_farki > 30 ? 'priority-high' : 
-                                 transfer.str_farki > 20 ? 'priority-medium' : 'priority-low';
-            const priorityText = transfer.str_farki > 30 ? 'Yüksek' : 
-                                transfer.str_farki > 20 ? 'Orta' : 'Düşük';
-
-            return `
-                <tr>
-                    <td>
-                        <strong>${transfer.urun_adi}</strong><br>
-                        <small>${transfer.renk} - ${transfer.beden}</small>
-                    </td>
-                    <td>
-                        ${transfer.gonderen_magaza}<br>
-                        <small>STR: ${transfer.gonderen_str}%</small>
-                    </td>
-                    <td>
-                        ${transfer.alan_magaza}<br>
-                        <small>STR: ${transfer.alan_str}%</small>
-                    </td>
-                    <td><strong>${transfer.transfer_miktari}</strong> adet</td>
-                    <td><strong>+${transfer.str_farki}%</strong></td>
-                    <td><span class="priority-badge ${priorityClass}">${priorityText}</span></td>
-                    <td>
-                        <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
-                        Onaylandı
-                    </td>
-                </tr>
-            `;
-        }).join('');
-
-        // Eğer daha fazla sonuç varsa bilgi göster
-        if (toplamTransfer > 20) {
-            tableBody.innerHTML += `
-                <tr style="background: #f8f9fa;">
-                    <td colspan="7" style="text-align: center; font-style: italic; padding: 20px;">
-                        <strong>Ve ${toplamTransfer - 20} öneri daha...</strong><br>
-                        <small>Tüm sonuçları görmek için Excel'e aktarın</small>
-                    </td>
-                </tr>
-            `;
-        }
-    }
-}
+            const stats = [
+                { label: 'Transfer Önerileri', value: toplamTransfer.toLocaleString(), icon: 'fas fa-truck' },
+                { label: 'Gösterilen Öneri', value: transferler.length.toLocaleString() + ' / ' + toplamTransfer.toLocaleString(), icon: 'fas fa-eye' },
+                { label: 'Toplam Transfer Miktarı', value: transferler.reduce((sum, t) => sum + t.transfer_miktari, 0).toLocaleString(), icon: 'fas fa-boxes' },
+                { label: 'Ortalama STR Farkı', value: (transferler.reduce((sum, t) => sum + t.str_farki, 0) / transferler.length || 0).toFixed(1) + '%', icon: 'fas fa-percentage' },
+                { label: 'Mağaza Sayısı', value: Object.keys(metrikler).length, icon: 'fas fa-store' }
+            ];
 
             statsContainer.innerHTML = stats.map(stat => `
                 <div class="stat-item">
@@ -859,9 +802,9 @@
                 </div>
             `).join('');
 
-            // Display transfer table
-            if (results.transferler && results.transferler.length > 0) {
-                tableBody.innerHTML = results.transferler.slice(0, 20).map(transfer => {
+            // Display transfer table (first 20)
+            if (transferler && transferler.length > 0) {
+                tableBody.innerHTML = transferler.slice(0, 20).map(transfer => {
                     const priorityClass = transfer.str_farki > 30 ? 'priority-high' : 
                                          transfer.str_farki > 20 ? 'priority-medium' : 'priority-low';
                     const priorityText = transfer.str_farki > 30 ? 'Yüksek' : 
@@ -891,6 +834,18 @@
                         </tr>
                     `;
                 }).join('');
+
+                // Eğer daha fazla sonuç varsa bilgi göster
+                if (toplamTransfer > 20) {
+                    tableBody.innerHTML += `
+                        <tr style="background: #f8f9fa;">
+                            <td colspan="7" style="text-align: center; font-style: italic; padding: 20px;">
+                                <strong>Ve ${toplamTransfer - 20} öneri daha...</strong><br>
+                                <small>Tüm sonuçları görmek için Excel'e aktarın</small>
+                            </td>
+                        </tr>
+                    `;
+                }
             }
         }
 
@@ -908,11 +863,8 @@
         }
 
         function downloadTemplate() {
-            const link = document.createElement('a');
-            link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,UEsDBBQAAAAIAA=='; // Sample Excel template
-            link.download = 'magaza_transfer_template.xlsx';
-            link.click();
-            showNotification('Şablon dosyası indirildi!', 'success');
+            window.open(`${API_BASE}/template`, '_blank');
+            showNotification('Şablon dosyası indiriliyor...', 'success');
         }
 
         function downloadResults() {
@@ -920,17 +872,44 @@
                 showNotification('İndirilecek sonuç yok!', 'warning');
                 return;
             }
-            // Implementation for downloading results
-            showNotification('Sonuçlar indiriliyor...', 'success');
+            exportToExcel();
         }
 
-        function exportToExcel() {
+        async function exportToExcel() {
             if (!analysisResults) {
                 showNotification('İndirilecek sonuç yok!', 'warning');
                 return;
             }
-            // Implementation for Excel export
-            showNotification('Excel dosyası oluşturuluyor...', 'success');
+            
+            try {
+                showNotification('Excel dosyası oluşturuluyor...', 'success');
+                
+                const response = await fetch(`${API_BASE}/export/excel`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `transfer_analizi_${new Date().getTime()}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    showNotification('Excel dosyası başarıyla indirildi!', 'success');
+                } else {
+                    throw new Error('Excel export başarısız');
+                }
+            } catch (error) {
+                console.error('Excel export error:', error);
+                showNotification('Excel export hatası! Lütfen tekrar deneyin.', 'error');
+            }
         }
 
         function showHelp() {
