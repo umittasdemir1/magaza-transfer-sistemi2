@@ -359,7 +359,7 @@ def upload_file():
 
 @app.route('/analyze', methods=['POST'])
 def analyze_data():
-    """Global STR transfer analizi - ORIJINAL ALGORITMA"""
+    """Global STR transfer analizi - PAGINATION İLE"""
     try:
         if sistem.data is None:
             return jsonify({'error': 'Önce bir dosya yükleyin'}), 400
@@ -371,9 +371,20 @@ def analyze_data():
         
         if results:
             sistem.mevcut_analiz = results
+            
+            # SADECE İLK 50 TRANSFER ÖNERİSİNİ GÖNDER (JSON boyutunu küçült)
+            limited_results = {
+                'analiz_tipi': results['analiz_tipi'],
+                'magaza_metrikleri': results['magaza_metrikleri'],
+                'transferler': results['transferler'][:50],  # İlk 50 tane
+                'transfer_gereksiz': results['transfer_gereksiz'][:20],  # İlk 20 tane
+                'toplam_transfer_sayisi': len(results['transferler']),
+                'toplam_gereksiz_sayisi': len(results['transfer_gereksiz'])
+            }
+            
             return jsonify({
                 'success': True,
-                'results': results
+                'results': limited_results
             })
         else:
             return jsonify({'error': 'Analiz başarısız'}), 500
