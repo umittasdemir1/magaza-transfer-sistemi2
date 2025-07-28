@@ -14,7 +14,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, origins=["*"])  # Netlify domain'ini buraya ekleyeceksiniz
+CORS(app, origins=[
+    "https://umittasdemir1.github.io",
+    "http://localhost:3000",
+    "*"
+])
 
 # Configuration
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
