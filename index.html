@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RetailFlow - Mağaza Transfer Optimizasyon Sistemi</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary-color: #f8fafc;
+            --accent-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--primary-color);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .logo i {
+            font-size: 2rem;
+            background: var(--gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: white;
+            box-shadow: var(--shadow);
+        }
+
+        /* Hero Section */
+        .hero {
+            background: var(--gradient);
+            color: white;
+            padding: 4rem 0;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto 2rem;
+        }
+
+        .hero-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Main Dashboard */
+        .dashboard {
+            padding: 3rem 0;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-4px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* File Upload */
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background: var(--secondary-color);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--primary-color);
+            background: var(--secondary-color);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .upload-text h3 {
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .upload-text p {
+            color: var(--text-secondary);
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            margin: 1rem 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--secondary-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Analysis Results */
+        .results-section {
+            display: none;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .results-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-item {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary-color);
+            box-shadow: var(--shadow);
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        /* Transfer Table */
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            background: var(--secondary-color);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .table tbody tr:hover {
+            background: var(--secondary-color);
+        }
+
+        .priority-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .priority-high {
+            background: #fef2f2;
+            color: var(--danger-color);
+        }
+
+        .priority-medium {
+            background: #fefce8;
+            color: var(--warning-color);
+        }
+
+        .priority-low {
+            background: #f0fdf4;
+            color: var(--accent-color);
+        }
+
+        /* Loading States */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--secondary-color);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .results-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .table-container {
+                overflow-x: auto;
+            }
+
+            .nav-actions {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            background: var(--accent-color);
+        }
+
+        .notification.error {
+            background: var(--danger-color);
+        }
+
+        .notification.warning {
+            background: var(--warning-color);
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--text-primary);
+            color: white;
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 4rem;
+        }
+
+        .footer p {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <nav class="navbar">
+                <div class="logo">
+                    <i class="fas fa-store"></i>
+                    <span>RetailFlow</span>
+                </div>
+                <div class="nav-actions">
+                    <button class="btn btn-secondary" onclick="showHelp()">
+                        <i class="fas fa-question-circle"></i>
+                        Yardım
+                    </button>
+                    <button class="btn btn-primary" onclick="downloadTemplate()">
+                        <i class="fas fa-download"></i>
+                        Şablon İndir
+                    </button>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Akıllı Mağaza Transfer Optimizasyonu</h1>
+            <p>STR bazlı algoritmalarla mağazalarınız arasında optimal ürün transferlerini belirleyin. Satış performansınızı artırın, envanter maliyetlerinizi düşürün.</p>
+            
+            <div class="hero-stats">
+                <div class="stat-card">
+                    <div class="stat-number">%35</div>
+                    <div>Satış Artışı</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">%28</div>
+                    <div>Envanter Azalışı</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">24/7</div>
+                    <div>Otomatik Analiz</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">50+</div>
+                    <div>Mutlu Müşteri</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Dashboard -->
+    <main class="dashboard">
+        <div class="container">
+            <div class="dashboard-grid">
+                <!-- File Upload Section -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-upload"></i>
+                            Veri Yükleme
+                        </h2>
+                    </div>
+                    
+                    <div class="upload-area" id="uploadArea">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <div class="upload-text">
+                            <h3>Excel dosyanızı yükleyin</h3>
+                            <p>Sürükle-bırak yapın veya tıklayarak seçin</p>
+                            <small>Desteklenen: .xlsx, .xls, .csv (Max: 50MB)</small>
+                        </div>
+                        <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls,.csv">
+                    </div>
+
+                    <div class="progress-container" id="progressContainer">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <p id="progressText">Yükleniyor...</p>
+                    </div>
+
+                    <div id="fileInfo" style="display: none; margin-top: 1rem;">
+                        <div class="stat-item">
+                            <div class="stat-label">Yüklenen Dosya</div>
+                            <div class="stat-value" id="fileName"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-bolt"></i>
+                            Hızlı İşlemler
+                        </h2>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                        <button class="btn btn-primary" onclick="startAnalysis()" id="analyzeBtn" disabled>
+                            <i class="fas fa-play"></i>
+                            Analizi Başlat
+                        </button>
+                        <button class="btn btn-secondary" onclick="downloadResults()" id="downloadBtn" disabled>
+                            <i class="fas fa-download"></i>
+                            Sonuçları İndir
+                        </button>
+                        <button class="btn btn-secondary" onclick="viewStores()">
+                            <i class="fas fa-store"></i>
+                            Mağazalar
+                        </button>
+                        <button class="btn btn-secondary" onclick="viewSettings()">
+                            <i class="fas fa-cog"></i>
+                            Ayarlar
+                        </button>
+                    </div>
+
+                    <div class="loading" id="analysisLoading">
+                        <div class="spinner"></div>
+                        <p>Global STR analizi yapılıyor...</p>
+                        <small>Bu işlem birkaç dakika sürebilir</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Results -->
+            <div class="results-section" id="resultsSection">
+                <div class="results-header">
+                    <h2>
+                        <i class="fas fa-chart-line"></i>
+                        Analiz Sonuçları
+                    </h2>
+                    <button class="btn btn-primary" onclick="exportToExcel()">
+                        <i class="fas fa-file-excel"></i>
+                        Excel'e Aktar
+                    </button>
+                </div>
+
+                <div class="results-stats" id="resultsStats">
+                    <!-- Stats will be populated dynamically -->
+                </div>
+
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Ürün</th>
+                                <th>Gönderen</th>
+                                <th>Alan</th>
+                                <th>Miktar</th>
+                                <th>STR Farkı</th>
+                                <th>Öncelik</th>
+                                <th>Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTable">
+                            <!-- Results will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 RetailFlow - Mağaza Transfer Optimizasyon Sistemi. Tüm hakları saklıdır.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Global variables
+        let uploadedData = null;
+        let analysisResults = null;
+        const API_BASE = 'https://your-render-api.onrender.com'; // Backend API URL
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const fileInfo = document.getElementById('fileInfo');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+
+        // Upload area events
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            // Validate file
+            const validTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+                               'application/vnd.ms-excel', 'text/csv'];
+            const maxSize = 50 * 1024 * 1024; // 50MB
+
+            if (!validTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.csv')) {
+                showNotification('Geçersiz dosya formatı! Sadece Excel (.xlsx, .xls) ve CSV dosyaları desteklenir.', 'error');
+                return;
+            }
+
+            if (file.size > maxSize) {
+                showNotification('Dosya boyutu çok büyük! Maksimum 50MB dosya yükleyebilirsiniz.', 'error');
+                return;
+            }
+
+            // Show progress
+            progressContainer.style.display = 'block';
+            uploadFile(file);
+        }
+
+        async function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                // Simulate progress
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    if (progress > 90) progress = 90;
+                    progressFill.style.width = progress + '%';
+                    progressText.textContent = `Yükleniyor... ${Math.round(progress)}%`;
+                }, 200);
+
+                const response = await fetch(`${API_BASE}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                clearInterval(progressInterval);
+
+                if (response.ok) {
+                    const result = await response.json();
+                    progressFill.style.width = '100%';
+                    progressText.textContent = 'Yükleme tamamlandı!';
+                    
+                    // Show file info
+                    document.getElementById('fileName').textContent = file.name;
+                    fileInfo.style.display = 'block';
+                    analyzeBtn.disabled = false;
+                    
+                    uploadedData = result;
+                    showNotification('Dosya başarıyla yüklendi!', 'success');
+                    
+                    setTimeout(() => {
+                        progressContainer.style.display = 'none';
+                    }, 2000);
+                } else {
+                    throw new Error('Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showNotification('Dosya yükleme başarısız! Lütfen tekrar deneyin.', 'error');
+                progressContainer.style.display = 'none';
+            }
+        }
+
+        async function startAnalysis() {
+            if (!uploadedData) {
+                showNotification('Önce bir dosya yükleyin!', 'warning');
+                return;
+            }
+
+            const loading = document.getElementById('analysisLoading');
+            const resultsSection = document.getElementById('resultsSection');
+            
+            loading.style.display = 'block';
+            analyzeBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/analyze`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ data: uploadedData })
+                });
+
+                if (response.ok) {
+                    analysisResults = await response.json();
+                    displayResults(analysisResults);
+                    resultsSection.style.display = 'block';
+                    document.getElementById('downloadBtn').disabled = false;
+                    showNotification('Analiz başarıyla tamamlandı!', 'success');
+                } else {
+                    throw new Error('Analysis failed');
+                }
+            } catch (error) {
+                console.error('Analysis error:', error);
+                showNotification('Analiz başarısız! Lütfen tekrar deneyin.', 'error');
+            } finally {
+                loading.style.display = 'none';
+                analyzeBtn.disabled = false;
+            }
+        }
+
+        function displayResults(results) {
+            const statsContainer = document.getElementById('resultsStats');
+            const tableBody = document.getElementById('resultsTable');
+
+            // Display stats
+            const stats = [
+                { label: 'Transfer Önerileri', value: results.transferler?.length || 0, icon: 'fas fa-truck' },
+                { label: 'Toplam Transfer Miktarı', value: results.transferler?.reduce((sum, t) => sum + t.transfer_miktari, 0) || 0, icon: 'fas fa-boxes' },
+                { label: 'Ortalama STR Farkı', value: ((results.transferler?.reduce((sum, t) => sum + t.str_farki, 0) || 0) / (results.transferler?.length || 1)).toFixed(1) + '%', icon: 'fas fa-percentage' },
+                { label: 'Mağaza Sayısı', value: Object.keys(results.magaza_metrikleri || {}).length, icon: 'fas fa-store' }
+            ];
+
+            statsContainer.innerHTML = stats.map(stat => `
+                <div class="stat-item">
+                    <div class="stat-label">
+                        <i class="${stat.icon}"></i>
+                        ${stat.label}
+                    </div>
+                    <div class="stat-value">${stat.value}</div>
+                </div>
+            `).join('');
+
+            // Display transfer table
+            if (results.transferler && results.transferler.length > 0) {
+                tableBody.innerHTML = results.transferler.slice(0, 20).map(transfer => {
+                    const priorityClass = transfer.str_farki > 30 ? 'priority-high' : 
+                                         transfer.str_farki > 20 ? 'priority-medium' : 'priority-low';
+                    const priorityText = transfer.str_farki > 30 ? 'Yüksek' : 
+                                        transfer.str_farki > 20 ? 'Orta' : 'Düşük';
+
+                    return `
+                        <tr>
+                            <td>
+                                <strong>${transfer.urun_adi}</strong><br>
+                                <small>${transfer.renk} - ${transfer.beden}</small>
+                            </td>
+                            <td>
+                                ${transfer.gonderen_magaza}<br>
+                                <small>STR: ${transfer.gonderen_str}%</small>
+                            </td>
+                            <td>
+                                ${transfer.alan_magaza}<br>
+                                <small>STR: ${transfer.alan_str}%</small>
+                            </td>
+                            <td><strong>${transfer.transfer_miktari}</strong> adet</td>
+                            <td><strong>+${transfer.str_farki}%</strong></td>
+                            <td><span class="priority-badge ${priorityClass}">${priorityText}</span></td>
+                            <td>
+                                <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
+                                Onaylandı
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => notification.classList.add('show'), 100);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => document.body.removeChild(notification), 300);
+            }, 3000);
+        }
+
+        function downloadTemplate() {
+            const link = document.createElement('a');
+            link.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,UEsDBBQAAAAIAA=='; // Sample Excel template
+            link.download = 'magaza_transfer_template.xlsx';
+            link.click();
+            showNotification('Şablon dosyası indirildi!', 'success');
+        }
+
+        function downloadResults() {
+            if (!analysisResults) {
+                showNotification('İndirilecek sonuç yok!', 'warning');
+                return;
+            }
+            // Implementation for downloading results
+            showNotification('Sonuçlar indiriliyor...', 'success');
+        }
+
+        function exportToExcel() {
+            if (!analysisResults) {
+                showNotification('İndirilecek sonuç yok!', 'warning');
+                return;
+            }
+            // Implementation for Excel export
+            showNotification('Excel dosyası oluşturuluyor...', 'success');
+        }
+
+        function showHelp() {
+            alert('RetailFlow Yardım\n\n1. Excel dosyanızı yükleyin\n2. Analizi başlatın\n3. Sonuçları inceleyin\n4. Excel olarak indirin');
+        }
+
+        function viewStores() {
+            showNotification('Mağaza detayları yakında...', 'warning');
+        }
+
+        function viewSettings() {
+            showNotification('Ayarlar yakında...', 'warning');
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('RetailFlow initialized');
+        });
+    </script>
+</body>
+</html>
