@@ -801,9 +801,16 @@
                     // DÜZELTME: results key'ini kontrol et
                     if (data.success && data.results) {
                         displayResults(data.results);
+                        
+                        // ZORLA GÖSTER - Bu satır eklendi
+                        console.log('Results section gösteriliyor...');
                         resultsSection.style.display = 'block';
+                        resultsSection.style.visibility = 'visible';
+                        
                         document.getElementById('downloadBtn').disabled = false;
                         showNotification('Analiz başarıyla tamamlandı!', 'success');
+                        
+                        console.log('✅ Results section başarıyla gösterildi!');
                     } else {
                         throw new Error('Analiz sonuçları boş veya hatalı');
                     }
