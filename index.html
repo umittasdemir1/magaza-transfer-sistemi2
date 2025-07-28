@@ -370,6 +370,17 @@
             100% { transform: rotate(360deg); }
         }
 
+        /* Debug Info */
+        .debug-info {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: monospace;
+            font-size: 0.875rem;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .dashboard-grid {
@@ -452,6 +463,10 @@
                     <span>RetailFlow</span>
                 </div>
                 <div class="nav-actions">
+                    <button class="btn btn-secondary" onclick="showDebugInfo()">
+                        <i class="fas fa-bug"></i>
+                        Debug
+                    </button>
                     <button class="btn btn-secondary" onclick="showHelp()">
                         <i class="fas fa-question-circle"></i>
                         Yardım
@@ -564,6 +579,21 @@
                         <div class="spinner"></div>
                         <p>Global STR analizi yapılıyor...</p>
                         <small>Bu işlem birkaç dakika sürebilir</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Debug Info -->
+            <div id="debugSection" style="display: none;">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-bug"></i>
+                            Debug Bilgileri
+                        </h2>
+                    </div>
+                    <div class="debug-info" id="debugInfo">
+                        Debug bilgileri buraya yüklenecek...
                     </div>
                 </div>
             </div>
@@ -697,15 +727,20 @@
                     progressText.textContent = `Yükleniyor... ${Math.round(progress)}%`;
                 }, 200);
 
+                console.log('Dosya yükleniyor:', API_BASE + '/upload');
+
                 const response = await fetch(`${API_BASE}/upload`, {
                     method: 'POST',
                     body: formData
                 });
 
                 clearInterval(progressInterval);
+                console.log('Upload response:', response.status, response.statusText);
 
                 if (response.ok) {
                     const result = await response.json();
+                    console.log('Upload başarılı:', result);
+                    
                     progressFill.style.width = '100%';
                     progressText.textContent = 'Yükleme tamamlandı!';
                     
@@ -721,11 +756,13 @@
                         progressContainer.style.display = 'none';
                     }, 2000);
                 } else {
-                    throw new Error('Upload failed');
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Upload failed:', errorData);
+                    throw new Error(errorData.error || 'Upload failed');
                 }
             } catch (error) {
                 console.error('Upload error:', error);
-                showNotification('Dosya yükleme başarısız! Lütfen tekrar deneyin.', 'error');
+                showNotification(`Dosya yükleme başarısız: ${error.message}`, 'error');
                 progressContainer.style.display = 'none';
             }
         }
@@ -743,6 +780,8 @@
             analyzeBtn.disabled = true;
 
             try {
+                console.log('Analiz başlatılıyor:', API_BASE + '/analyze');
+                
                 const response = await fetch(`${API_BASE}/analyze`, {
                     method: 'POST',
                     headers: {
@@ -750,22 +789,32 @@
                     }
                 });
 
+                console.log('Analysis response:', response.status, response.statusText);
+
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('Analiz sonuçları alındı:', data);
                     
-                    // Global değişkeni set et
+                    // DÜZELTME: Analiz sonuçlarını doğru şekilde kaydet
                     analysisResults = data;
                     
-                    displayResults(data.results);
-                    resultsSection.style.display = 'block';
-                    document.getElementById('downloadBtn').disabled = false;
-                    showNotification('Analiz başarıyla tamamlandı!', 'success');
+                    // DÜZELTME: results key'ini kontrol et
+                    if (data.success && data.results) {
+                        displayResults(data.results);
+                        resultsSection.style.display = 'block';
+                        document.getElementById('downloadBtn').disabled = false;
+                        showNotification('Analiz başarıyla tamamlandı!', 'success');
+                    } else {
+                        throw new Error('Analiz sonuçları boş veya hatalı');
+                    }
                 } else {
-                    throw new Error('Analysis failed');
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Analysis failed:', errorData);
+                    throw new Error(errorData.error || 'Analysis failed');
                 }
             } catch (error) {
                 console.error('Analysis error:', error);
-                showNotification('Analiz başarısız! Lütfen tekrar deneyin.', 'error');
+                showNotification(`Analiz başarısız: ${error.message}`, 'error');
             } finally {
                 loading.style.display = 'none';
                 analyzeBtn.disabled = false;
@@ -773,22 +822,26 @@
         }
 
         function displayResults(results) {
+            console.log('displayResults çağrıldı:', results);
+            
             const statsContainer = document.getElementById('resultsStats');
             const tableBody = document.getElementById('resultsTable');
 
-            console.log('Results received:', results);
-
-            // Display stats
+            // DÜZELTME: Veri yapısını kontrol et
             const transferler = results.transferler || [];
             const metrikler = results.magaza_metrikleri || {};
             const toplamTransfer = results.toplam_transfer_sayisi || transferler.length;
             const toplamGereksiz = results.toplam_gereksiz_sayisi || 0;
 
+            console.log('Transfer sayısı:', transferler.length);
+            console.log('Toplam transfer:', toplamTransfer);
+
+            // DÜZELTME: İstatistikleri göster
             const stats = [
                 { label: 'Transfer Önerileri', value: toplamTransfer.toLocaleString(), icon: 'fas fa-truck' },
                 { label: 'Gösterilen Öneri', value: transferler.length.toLocaleString() + ' / ' + toplamTransfer.toLocaleString(), icon: 'fas fa-eye' },
-                { label: 'Toplam Transfer Miktarı', value: transferler.reduce((sum, t) => sum + t.transfer_miktari, 0).toLocaleString(), icon: 'fas fa-boxes' },
-                { label: 'Ortalama STR Farkı', value: (transferler.reduce((sum, t) => sum + t.str_farki, 0) / transferler.length || 0).toFixed(1) + '%', icon: 'fas fa-percentage' },
+                { label: 'Toplam Transfer Miktarı', value: transferler.reduce((sum, t) => sum + (t.transfer_miktari || 0), 0).toLocaleString(), icon: 'fas fa-boxes' },
+                { label: 'Ortalama STR Farkı', value: transferler.length > 0 ? (transferler.reduce((sum, t) => sum + (t.str_farki || 0), 0) / transferler.length).toFixed(1) + '%' : '0%', icon: 'fas fa-percentage' },
                 { label: 'Mağaza Sayısı', value: Object.keys(metrikler).length, icon: 'fas fa-store' }
             ];
 
@@ -802,30 +855,33 @@
                 </div>
             `).join('');
 
-            // Display transfer table (first 20)
+            // DÜZELTME: Transfer tablosunu göster
             if (transferler && transferler.length > 0) {
+                console.log('Transfer tablosu oluşturuluyor...');
+                
                 tableBody.innerHTML = transferler.slice(0, 20).map(transfer => {
-                    const priorityClass = transfer.str_farki > 30 ? 'priority-high' : 
-                                         transfer.str_farki > 20 ? 'priority-medium' : 'priority-low';
-                    const priorityText = transfer.str_farki > 30 ? 'Yüksek' : 
-                                        transfer.str_farki > 20 ? 'Orta' : 'Düşük';
+                    const strFarki = transfer.str_farki || 0;
+                    const priorityClass = strFarki > 30 ? 'priority-high' : 
+                                         strFarki > 20 ? 'priority-medium' : 'priority-low';
+                    const priorityText = strFarki > 30 ? 'Yüksek' : 
+                                        strFarki > 20 ? 'Orta' : 'Düşük';
 
                     return `
                         <tr>
                             <td>
-                                <strong>${transfer.urun_adi}</strong><br>
-                                <small>${transfer.renk} - ${transfer.beden}</small>
+                                <strong>${transfer.urun_adi || 'N/A'}</strong><br>
+                                <small>${transfer.renk || 'N/A'} - ${transfer.beden || 'N/A'}</small>
                             </td>
                             <td>
-                                ${transfer.gonderen_magaza}<br>
-                                <small>STR: ${transfer.gonderen_str}%</small>
+                                ${transfer.gonderen_magaza || 'N/A'}<br>
+                                <small>STR: ${transfer.gonderen_str || 0}%</small>
                             </td>
                             <td>
-                                ${transfer.alan_magaza}<br>
-                                <small>STR: ${transfer.alan_str}%</small>
+                                ${transfer.alan_magaza || 'N/A'}<br>
+                                <small>STR: ${transfer.alan_str || 0}%</small>
                             </td>
-                            <td><strong>${transfer.transfer_miktari}</strong> adet</td>
-                            <td><strong>+${transfer.str_farki}%</strong></td>
+                            <td><strong>${transfer.transfer_miktari || 0}</strong> adet</td>
+                            <td><strong>+${strFarki}%</strong></td>
                             <td><span class="priority-badge ${priorityClass}">${priorityText}</span></td>
                             <td>
                                 <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
@@ -846,6 +902,18 @@
                         </tr>
                     `;
                 }
+                
+                console.log('Transfer tablosu oluşturuldu!');
+            } else {
+                console.log('Transfer verisi bulunamadı');
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 20px;">
+                            <i class="fas fa-info-circle" style="color: var(--warning-color);"></i>
+                            Transfer önerisi bulunamadı
+                        </td>
+                    </tr>
+                `;
             }
         }
 
@@ -863,8 +931,14 @@
         }
 
         function downloadTemplate() {
-            window.open(`${API_BASE}/template`, '_blank');
-            showNotification('Şablon dosyası indiriliyor...', 'success');
+            // DÜZELTME: Template download
+            try {
+                window.open(`${API_BASE}/template`, '_blank');
+                showNotification('Şablon dosyası indiriliyor...', 'success');
+            } catch (error) {
+                console.error('Template download error:', error);
+                showNotification('Şablon indirme hatası!', 'error');
+            }
         }
 
         function downloadResults() {
@@ -882,14 +956,21 @@
             }
             
             try {
+                console.log('Excel export başlatılıyor...');
                 showNotification('Excel dosyası oluşturuluyor...', 'success');
                 
+                // DÜZELTME: Export request'i düzelt
                 const response = await fetch(`${API_BASE}/export/excel`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
-                    }
+                    },
+                    body: JSON.stringify({
+                        results: analysisResults.results || analysisResults
+                    })
                 });
+                
+                console.log('Excel export response:', response.status, response.statusText);
                 
                 if (response.ok) {
                     const blob = await response.blob();
@@ -904,20 +985,63 @@
                     
                     showNotification('Excel dosyası başarıyla indirildi!', 'success');
                 } else {
-                    throw new Error('Excel export başarısız');
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error('Excel export failed:', errorData);
+                    throw new Error(errorData.error || 'Excel export başarısız');
                 }
             } catch (error) {
                 console.error('Excel export error:', error);
-                showNotification('Excel export hatası! Lütfen tekrar deneyin.', 'error');
+                showNotification(`Excel export hatası: ${error.message}`, 'error');
+            }
+        }
+
+        function showDebugInfo() {
+            const debugSection = document.getElementById('debugSection');
+            const debugInfo = document.getElementById('debugInfo');
+            
+            if (debugSection.style.display === 'none') {
+                debugSection.style.display = 'block';
+                
+                const debugData = {
+                    timestamp: new Date().toISOString(),
+                    api_base: API_BASE,
+                    uploaded_data: uploadedData ? 'Yüklü' : 'Yok',
+                    analysis_results: analysisResults ? 'Var' : 'Yok',
+                    analysis_results_structure: analysisResults ? Object.keys(analysisResults) : 'N/A',
+                    browser_info: {
+                        userAgent: navigator.userAgent,
+                        language: navigator.language,
+                        cookieEnabled: navigator.cookieEnabled
+                    }
+                };
+                
+                if (analysisResults && analysisResults.results) {
+                    debugData.results_detail = {
+                        transferler_count: analysisResults.results.transferler ? analysisResults.results.transferler.length : 0,
+                        toplam_transfer: analysisResults.results.toplam_transfer_sayisi || 0,
+                        magaza_count: Object.keys(analysisResults.results.magaza_metrikleri || {}).length
+                    };
+                }
+                
+                debugInfo.innerHTML = `<pre>${JSON.stringify(debugData, null, 2)}</pre>`;
+            } else {
+                debugSection.style.display = 'none';
             }
         }
 
         function showHelp() {
-            alert('RetailFlow Yardım\n\n1. Excel dosyanızı yükleyin\n2. Analizi başlatın\n3. Sonuçları inceleyin\n4. Excel olarak indirin');
+            alert('RetailFlow Yardım\n\n1. Excel dosyanızı yükleyin (Sütunlar: Depo Adı, Ürün Kodu, Ürün Adı, Satis, Envanter)\n2. Analizi başlatın\n3. Sonuçları inceleyin\n4. Excel olarak indirin\n\nSorun yaşıyorsanız Debug butonuna basarak sistem bilgilerini kontrol edin.');
         }
 
         function viewStores() {
-            showNotification('Mağaza detayları yakında...', 'warning');
+            if (analysisResults && analysisResults.results && analysisResults.results.magaza_metrikleri) {
+                const storeInfo = Object.entries(analysisResults.results.magaza_metrikleri)
+                    .map(([name, metrics]) => `${name}: ${metrics.toplam_satis} satış, ${metrics.toplam_envanter} envanter`)
+                    .join('\n');
+                alert('Mağaza Bilgileri:\n\n' + storeInfo);
+            } else {
+                showNotification('Önce analiz yapın!', 'warning');
+            }
         }
 
         function viewSettings() {
@@ -927,7 +1051,14 @@
         // Initialize app
         document.addEventListener('DOMContentLoaded', function() {
             console.log('RetailFlow initialized');
+            console.log('Fonksiyonlar kontrol:');
+            console.log('displayResults:', typeof displayResults);
+            console.log('analysisResults:', analysisResults);
         });
+
+        // DÜZELTME: Global window objesine fonksiyonları ekle (debug için)
+        window.displayResults = displayResults;
+        window.analysisResults = analysisResults;
     </script>
 </body>
 </html>
