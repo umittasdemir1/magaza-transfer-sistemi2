@@ -731,43 +731,46 @@
         }
 
         async function startAnalysis() {
-            if (!uploadedData) {
-                showNotification('Önce bir dosya yükleyin!', 'warning');
-                return;
-            }
+    if (!uploadedData) {
+        showNotification('Önce bir dosya yükleyin!', 'warning');
+        return;
+    }
 
-            const loading = document.getElementById('analysisLoading');
-            const resultsSection = document.getElementById('resultsSection');
+    const loading = document.getElementById('analysisLoading');
+    const resultsSection = document.getElementById('resultsSection');
+    
+    loading.style.display = 'block';
+    analyzeBtn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE}/analyze`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
             
-            loading.style.display = 'block';
-            analyzeBtn.disabled = true;
-
-            try {
-                const response = await fetch(`${API_BASE}/analyze`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ data: uploadedData })
-                });
-
-                if (response.ok) {
-                    analysisResults = await response.json();
-                    displayResults(analysisResults);
-                    resultsSection.style.display = 'block';
-                    document.getElementById('downloadBtn').disabled = false;
-                    showNotification('Analiz başarıyla tamamlandı!', 'success');
-                } else {
-                    throw new Error('Analysis failed');
-                }
-            } catch (error) {
-                console.error('Analysis error:', error);
-                showNotification('Analiz başarısız! Lütfen tekrar deneyin.', 'error');
-            } finally {
-                loading.style.display = 'none';
-                analyzeBtn.disabled = false;
-            }
+            // BURADA EKSİK OLAN SATIRLAR:
+            analysisResults = data;  // Global değişkeni set et
+            
+            displayResults(data.results);
+            resultsSection.style.display = 'block';
+            document.getElementById('downloadBtn').disabled = false;
+            showNotification('Analiz başarıyla tamamlandı!', 'success');
+        } else {
+            throw new Error('Analysis failed');
         }
+    } catch (error) {
+        console.error('Analysis error:', error);
+        showNotification('Analiz başarısız! Lütfen tekrar deneyin.', 'error');
+    } finally {
+        loading.style.display = 'none';
+        analyzeBtn.disabled = false;
+    }
+}
 
         function displayResults(results) {
     const statsContainer = document.getElementById('resultsStats');
