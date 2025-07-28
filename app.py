@@ -34,12 +34,11 @@ class MagazaTransferSistemi:
     def csv_oku(self, file_content):
         """CSV içeriğini oku ve işle"""
         try:
-            # CSV'yi satır satır oku
-            # Hem virgül hem noktalı virgül desteği
-if ';' in file_content.split('\n')[0]:
-    csv_reader = csv.DictReader(io.StringIO(file_content), delimiter=';')
-else:
-    csv_reader = csv.DictReader(io.StringIO(file_content), delimiter=',')
+            # CSV'yi satır satır oku (GİRİNTİ DÜZELTİLDİ)
+            if ';' in file_content.split('\n')[0]:
+                csv_reader = csv.DictReader(io.StringIO(file_content), delimiter=';')
+            else:
+                csv_reader = csv.DictReader(io.StringIO(file_content), delimiter=',')
             data = []
             
             for row in csv_reader:
