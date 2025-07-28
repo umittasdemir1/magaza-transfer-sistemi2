@@ -770,16 +770,81 @@
         }
 
         function displayResults(results) {
-            const statsContainer = document.getElementById('resultsStats');
-            const tableBody = document.getElementById('resultsTable');
+    const statsContainer = document.getElementById('resultsStats');
+    const tableBody = document.getElementById('resultsTable');
 
-            // Display stats
-            const stats = [
-                { label: 'Transfer Önerileri', value: results.transferler?.length || 0, icon: 'fas fa-truck' },
-                { label: 'Toplam Transfer Miktarı', value: results.transferler?.reduce((sum, t) => sum + t.transfer_miktari, 0) || 0, icon: 'fas fa-boxes' },
-                { label: 'Ortalama STR Farkı', value: ((results.transferler?.reduce((sum, t) => sum + t.str_farki, 0) || 0) / (results.transferler?.length || 1)).toFixed(1) + '%', icon: 'fas fa-percentage' },
-                { label: 'Mağaza Sayısı', value: Object.keys(results.magaza_metrikleri || {}).length, icon: 'fas fa-store' }
-            ];
+    console.log('Results received:', results);
+
+    // Display stats
+    const transferler = results.transferler || [];
+    const metrikler = results.magaza_metrikleri || {};
+    const toplamTransfer = results.toplam_transfer_sayisi || transferler.length;
+    const toplamGereksiz = results.toplam_gereksiz_sayisi || 0;
+
+    const stats = [
+        { label: 'Transfer Önerileri', value: toplamTransfer.toLocaleString(), icon: 'fas fa-truck' },
+        { label: 'Gösterilen Öneri', value: transferler.length.toLocaleString() + ' / ' + toplamTransfer.toLocaleString(), icon: 'fas fa-eye' },
+        { label: 'Toplam Transfer Miktarı', value: transferler.reduce((sum, t) => sum + t.transfer_miktari, 0).toLocaleString(), icon: 'fas fa-boxes' },
+        { label: 'Ortalama STR Farkı', value: (transferler.reduce((sum, t) => sum + t.str_farki, 0) / transferler.length || 0).toFixed(1) + '%', icon: 'fas fa-percentage' },
+        { label: 'Mağaza Sayısı', value: Object.keys(metrikler).length, icon: 'fas fa-store' }
+    ];
+
+    statsContainer.innerHTML = stats.map(stat => `
+        <div class="stat-item">
+            <div class="stat-label">
+                <i class="${stat.icon}"></i>
+                ${stat.label}
+            </div>
+            <div class="stat-value">${stat.value}</div>
+        </div>
+    `).join('');
+
+    // Display transfer table (first 20)
+    if (transferler && transferler.length > 0) {
+        tableBody.innerHTML = transferler.slice(0, 20).map(transfer => {
+            const priorityClass = transfer.str_farki > 30 ? 'priority-high' : 
+                                 transfer.str_farki > 20 ? 'priority-medium' : 'priority-low';
+            const priorityText = transfer.str_farki > 30 ? 'Yüksek' : 
+                                transfer.str_farki > 20 ? 'Orta' : 'Düşük';
+
+            return `
+                <tr>
+                    <td>
+                        <strong>${transfer.urun_adi}</strong><br>
+                        <small>${transfer.renk} - ${transfer.beden}</small>
+                    </td>
+                    <td>
+                        ${transfer.gonderen_magaza}<br>
+                        <small>STR: ${transfer.gonderen_str}%</small>
+                    </td>
+                    <td>
+                        ${transfer.alan_magaza}<br>
+                        <small>STR: ${transfer.alan_str}%</small>
+                    </td>
+                    <td><strong>${transfer.transfer_miktari}</strong> adet</td>
+                    <td><strong>+${transfer.str_farki}%</strong></td>
+                    <td><span class="priority-badge ${priorityClass}">${priorityText}</span></td>
+                    <td>
+                        <i class="fas fa-check-circle" style="color: var(--accent-color);"></i>
+                        Onaylandı
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Eğer daha fazla sonuç varsa bilgi göster
+        if (toplamTransfer > 20) {
+            tableBody.innerHTML += `
+                <tr style="background: #f8f9fa;">
+                    <td colspan="7" style="text-align: center; font-style: italic; padding: 20px;">
+                        <strong>Ve ${toplamTransfer - 20} öneri daha...</strong><br>
+                        <small>Tüm sonuçları görmek için Excel'e aktarın</small>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+}
 
             statsContainer.innerHTML = stats.map(stat => `
                 <div class="stat-item">
