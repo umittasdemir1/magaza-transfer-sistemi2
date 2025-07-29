@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
+from flask import Flask, request, jsonify, send_file, make_response
+from flask_cors import CORS, cross_origin
 import pandas as pd
 import os
 import io
@@ -14,7 +14,38 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app, origins=["*"])
+
+# ===== RENDER.COM İÇİN DÜZELTILMIŞ CORS KONFIGÜRASYONU =====
+CORS(app, 
+     resources={r"/*": {"origins": "*"}},
+     allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=False,  # Render'da credential sorununu önlemek için
+     send_wildcard=True,
+     always_send=True
+)
+
+# Manual CORS header ekleme (double protection)
+@app.after_request
+def after_request(response):
+    """Her response'a CORS header ekle - Render.com için kritik"""
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'false')
+    return response
+
+# Preflight request handler
+@app.before_request
+def handle_preflight():
+    """OPTIONS request'leri handle et"""
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With")
+        response.headers.add('Access-Control-Allow-Methods', "GET,PUT,POST,DELETE,OPTIONS")
+        response.headers.add('Access-Control-Allow-Credentials', 'false')
+        return response
 
 # Configuration
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
@@ -306,17 +337,26 @@ sistem = MagazaTransferSistemi()
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['GET', 'OPTIONS'])
+@cross_origin()
 def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'service': 'RetailFlow Transfer API - ORIJINAL SISTEM',
-        'version': '4.0.0',
-        'timestamp': datetime.now().isoformat()
-    })
+    """Health check endpoint - CORS header'larıyla"""
+    try:
+        response_data = {
+            'status': 'healthy',
+            'service': 'RetailFlow Transfer API - RENDER CORS FIX',
+            'version': '4.1.0',
+            'timestamp': datetime.now().isoformat(),
+            'cors_enabled': True
+        }
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"Health check error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/upload', methods=['POST'])
+@app.route('/upload', methods=['POST', 'OPTIONS'])
+@cross_origin()
 def upload_file():
     """Dosya yükleme endpoint'i - EXCEL + CSV DESTEĞI"""
     try:
@@ -357,7 +397,8 @@ def upload_file():
         logger.error(f"Upload error: {str(e)}")
         return jsonify({'error': f'Dosya yükleme hatası: {str(e)}'}), 500
 
-@app.route('/analyze', methods=['POST'])
+@app.route('/analyze', methods=['POST', 'OPTIONS'])
+@cross_origin()
 def analyze_data():
     """Global STR transfer analizi - PAGINATION İLE"""
     try:
@@ -393,11 +434,12 @@ def analyze_data():
         logger.error(f"Analysis error: {str(e)}")
         return jsonify({'error': f'Analiz hatası: {str(e)}'}), 500
 
-@app.route('/export/excel', methods=['POST'])
+@app.route('/export/excel', methods=['POST', 'OPTIONS'])
+@cross_origin()
 def export_excel():
-    """Excel export - DÜZELTILMIŞ SÜRÜM"""
+    """Excel export - RENDER CORS FIX"""
     try:
-        # DÜZELTME: Request body'den results al
+        # Request body'den results al
         try:
             request_data = request.get_json()
             if request_data and 'results' in request_data:
@@ -492,103 +534,24 @@ def export_excel():
         
         logger.info(f"Excel dosyası oluşturuldu: {filename}")
         
-        return send_file(
+        # CORS header'larıyla send_file
+        response = send_file(
             output,
             as_attachment=True,
             download_name=filename,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         
-    except Exception as e:
-        logger.error(f"Export error: {str(e)}")
-        return jsonify({'error': f'Export hatası: {str(e)}'}), 500
+        response.headers.add('Access-Control-Expose-Headers', 'Content-Disposition')
         
-        transferler = sistem.mevcut_analiz['transferler']
-        transfer_gereksiz = sistem.mevcut_analiz.get('transfer_gereksiz', [])
-        
-        # Excel dosyası oluştur
-        output = io.BytesIO()
-        
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Transfer önerileri sayfası
-            if transferler:
-                df_transfer = pd.DataFrame(transferler)
-                
-                # ORIJINAL SÜTUN MAPPING
-                kolon_mapping = {
-                    'urun_anahtari': 'Ürün Grubu (Ad+Renk+Beden)',
-                    'urun_kodu': 'Ürün Kodu (Örnek)',
-                    'urun_adi': 'Ürün Adı',
-                    'renk': 'Renk',
-                    'beden': 'Beden',
-                    'gonderen_magaza': 'Gönderen Mağaza',
-                    'alan_magaza': 'Alan Mağaza',
-                    'transfer_miktari': 'Transfer Miktarı',
-                    'gonderen_satis': 'Gönderen Satış',
-                    'gonderen_envanter': 'Gönderen Envanter',
-                    'alan_satis': 'Alan Satış',
-                    'alan_envanter': 'Alan Envanter',
-                    'gonderen_str': 'Gönderen STR (%)',
-                    'alan_str': 'Alan STR (%)',
-                    'str_farki': 'STR Farkı (%)',
-                    'teorik_transfer': 'Teorik Transfer',
-                    'uygulanan_filtre': 'Uygulanan Filtre',
-                    'alan_stok_durumu': 'Alan Stok Durumu',
-                    'magaza_sayisi': 'Mevcut Mağaza Sayısı',
-                    'min_str': 'Min STR (%)',
-                    'max_str': 'Max STR (%)',
-                    'satis_farki': 'Satış Farkı',
-                    'envanter_farki': 'Envanter Farkı'
-                }
-                
-                # Sadece mevcut sütunları eşleştir
-                mevcut_mapping = {k: v for k, v in kolon_mapping.items() if k in df_transfer.columns}
-                df_transfer = df_transfer.rename(columns=mevcut_mapping)
-                tutulacak_kolonlar = list(mevcut_mapping.values())
-                df_transfer = df_transfer[tutulacak_kolonlar]
-                df_transfer.to_excel(writer, index=False, sheet_name='Transfer Önerileri')
-            
-            # Transfer gerekmeyen ürünler sayfası
-            if transfer_gereksiz:
-                df_gereksiz = pd.DataFrame(transfer_gereksiz)
-                gereksiz_mapping = {
-                    'urun_anahtari': 'Ürün Grubu (Ad+Renk+Beden)',
-                    'urun_adi': 'Ürün Adı',
-                    'renk': 'Renk',
-                    'beden': 'Beden',
-                    'magaza_sayisi': 'Mevcut Mağaza Sayısı',
-                    'ortalama_str': 'Ortalama STR (%)',
-                    'str_fark': 'STR Farkı (%)',
-                    'red_nedeni': 'Transfer Yapılmama Nedeni'
-                }
-                df_gereksiz = df_gereksiz.rename(columns=gereksiz_mapping)
-                gereksiz_kolonlar = list(gereksiz_mapping.values())
-                df_gereksiz = df_gereksiz[gereksiz_kolonlar]
-                df_gereksiz.to_excel(writer, index=False, sheet_name='Transfer Gerekmeyen')
-            
-            # Mağaza metrikleri
-            if sistem.mevcut_analiz['magaza_metrikleri']:
-                df_metrikler = pd.DataFrame(sistem.mevcut_analiz['magaza_metrikleri']).T
-                df_metrikler.to_excel(writer, sheet_name='Mağaza Metrikleri')
-        
-        output.seek(0)
-        
-        # Dosya adı
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'global_transfer_analizi_{timestamp}.xlsx'
-        
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=filename,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
+        return response
         
     except Exception as e:
         logger.error(f"Export error: {str(e)}")
         return jsonify({'error': f'Export hatası: {str(e)}'}), 500
 
-@app.route('/stores', methods=['GET'])
+@app.route('/stores', methods=['GET', 'OPTIONS'])
+@cross_origin()
 def get_stores():
     """Mağaza listesi"""
     try:
@@ -617,6 +580,47 @@ def get_stores():
         logger.error(f"Stores error: {str(e)}")
         return jsonify({'error': f'Mağaza verisi hatası: {str(e)}'}), 500
 
+@app.route('/template', methods=['GET', 'OPTIONS'])
+@cross_origin()
+def download_template():
+    """Excel template download"""
+    try:
+        # Basit template oluştur
+        template_data = {
+            'Depo Adı': ['Mağaza A', 'Mağaza A', 'Mağaza B', 'Mağaza B'],
+            'Ürün Kodu': ['UR001', 'UR002', 'UR001', 'UR002'],
+            'Ürün Adı': ['T-Shirt', 'Pantolon', 'T-Shirt', 'Pantolon'],
+            'Satis': [10, 15, 20, 5],
+            'Envanter': [30, 25, 10, 40],
+            'Renk Açıklaması': ['Kırmızı', 'Mavi', 'Kırmızı', 'Mavi'],
+            'Beden': ['M', 'L', 'M', 'L']
+        }
+        
+        df = pd.DataFrame(template_data)
+        output = io.BytesIO()
+        
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Veri')
+        
+        output.seek(0)
+        
+        response = send_file(
+            output,
+            as_attachment=True,
+            download_name='retailflow_template.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+        response.headers.add('Access-Control-Expose-Headers', 'Content-Disposition')
+        
+        logger.info("Template downloaded")
+        return response
+        
+    except Exception as e:
+        logger.error(f"Template error: {str(e)}")
+        return jsonify({'error': f'Template hatası: {str(e)}'}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
+    logger.info(f"Starting Flask app with CORS support on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
